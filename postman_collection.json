@@ -1,0 +1,278 @@
+{
+  "info": {
+    "name": "Polla Mundial API",
+    "description": "Colección de endpoints para la aplicación de la Polla Mundialista.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "pega_tu_token_aqui",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación",
+      "item": [
+        {
+          "name": "Registro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test1@ejemplo.com\",\n  \"password\": \"123456\",\n  \"name\": \"Usuario Prueba\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test1@ejemplo.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Grupos",
+      "item": [
+        {
+          "name": "Crear Grupo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Los Pibes del Mundial\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar Mis Grupos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invitar Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupId\": \"reemplazar_con_id_del_grupo\",\n  \"email\": \"amigo@ejemplo.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/groups/invite",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "groups",
+                "invite"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unirse a Grupo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"reemplazar_con_el_codigo_corto\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/groups/join",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "groups",
+                "join"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Predicciones",
+      "item": [
+        {
+          "name": "Obtener Partidos y mis Predicciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predictions/matches",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predictions",
+                "matches"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enviar Predicción",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"31\",\n  \"homeScore\": 2,\n  \"awayScore\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/predictions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predictions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ver Leaderboard de un Grupo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predictions/leaderboard/:groupId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predictions",
+                "leaderboard",
+                ":groupId"
+              ],
+              "variable": [
+                {
+                  "key": "groupId",
+                  "value": "reemplazar_con_id_del_grupo"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

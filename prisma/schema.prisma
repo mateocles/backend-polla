@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String       @id @default(uuid()) @db.Uuid
+  email            String       @unique
+  passwordHash     String?
+  googleId         String?
+  name             String
+  avatarUrl        String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime     @default(now())
+  
+  ownedGroups      Group[]      @relation("GroupOwner")
+  groups           UserGroup[]
+  predictions      Prediction[]
+}
+
+model Group {
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String
+  imageUrl   String?
+  ownerId    String      @db.Uuid
+  inviteCode String      @unique
+  createdAt  DateTime    @default(now())
+  
+  owner      User        @relation("GroupOwner", fields: [ownerId], references: [id])
+  members    UserGroup[]
+}
+
+model UserGroup {
+  userId   String   @db.Uuid
+  groupId  String   @db.Uuid
+  joinedAt DateTime @default(now())
+  
+  user     User     @relation(fields: [userId], references: [id])
+  group    Group    @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+}
+
+model Match {
+  id          String       @id
+  homeTeamId  String
+  awayTeamId  String
+  homeTeamNameEn String?
+  awayTeamNameEn String?
+  homeTeamNameFa String?
+  awayTeamNameFa String?
+  matchDate   DateTime
+  status      String       // 'notstarted', 'finished'
+  homeScore   Int?
+  awayScore   Int?
+  homeScorers String[]     @default([])
+  awayScorers String[]     @default([])
+
+  predictions Prediction[]
+}
+
+model Prediction {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  matchId   String
+  homeScore Int
+  awayScore Int
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id])
+  match     Match    @relation(fields: [matchId], references: [id])
+
+  @@unique([userId, matchId])
+}
