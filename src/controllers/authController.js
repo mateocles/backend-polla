@@ -1,6 +1,18 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const prisma = require('../lib/prisma');
+
+// Audiencias válidas para los ID tokens de Google (web/iOS/Android/Expo).
+const GOOGLE_AUDIENCES = [
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_IOS_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_EXPO_CLIENT_ID,
+].filter(Boolean);
+
+const googleClient = new OAuth2Client();
 
 class AuthController {
   static async register(req, res) {
@@ -63,6 +75,43 @@ class AuthController {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Login/registro con Google vía ID token (web y móvil).
+  // El cliente obtiene el idToken de Google y lo manda aquí para verificarlo.
+  static async googleAuth(req, res) {
+    try {
+      const { idToken } = req.body;
+      if (!idToken) return res.status(400).json({ error: 'Missing idToken' });
+
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: GOOGLE_AUDIENCES.length ? GOOGLE_AUDIENCES : undefined,
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.email) return res.status(401).json({ error: 'Invalid Google token' });
+
+      const { sub: googleId, email, name, picture } = payload;
+
+      // Busca por email; crea la cuenta si no existe (sin contraseña).
+      let user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        user = await prisma.user.create({
+          data: { email, name: name || email, googleId, avatarUrl: picture || null },
+        });
+      } else if (!user.googleId) {
+        user = await prisma.user.update({ where: { id: user.id }, data: { googleId } });
+      }
+
+      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+      res.json({
+        token,
+        user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl },
+      });
+    } catch (error) {
+      console.error('Google auth error:', error.message);
+      res.status(401).json({ error: 'No se pudo verificar la cuenta de Google' });
     }
   }
 
