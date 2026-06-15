@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const prisma = require('../lib/prisma');
 const EmailService = require('../services/emailService');
 
@@ -9,7 +9,7 @@ class GroupController {
       const ownerId = req.user.userId;
 
       // Generate a unique short code for invites
-      const inviteCode = uuidv4().substring(0, 8);
+      const inviteCode = randomUUID().substring(0, 8);
 
       const group = await prisma.group.create({
         data: {
