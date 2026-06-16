@@ -5,7 +5,7 @@ const EmailService = require('../services/emailService');
 class GroupController {
   static async createGroup(req, res) {
     try {
-      const { name } = req.body;
+      const { name, isPublic } = req.body;
       const ownerId = req.user.userId;
 
       // Generate a unique short code for invites
@@ -14,6 +14,7 @@ class GroupController {
       const group = await prisma.group.create({
         data: {
           name,
+          isPublic: !!isPublic,
           ownerId,
           inviteCode,
           members: {
@@ -65,6 +66,7 @@ class GroupController {
           id: g.id,
           name: g.name,
           imageUrl: g.imageUrl,
+          isPublic: g.isPublic,
           inviteCode: g.inviteCode,
           ownerId: g.ownerId,
           createdAt: g.createdAt,
@@ -76,6 +78,54 @@ class GroupController {
       });
 
       res.json(groups);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Lista grupos públicos a los que el usuario NO pertenece.
+  static async listPublicGroups(req, res) {
+    try {
+      const userId = req.user.userId;
+      const groups = await prisma.group.findMany({
+        where: { isPublic: true, members: { none: { userId } } },
+        include: { _count: { select: { members: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      res.json(
+        groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          imageUrl: g.imageUrl,
+          isPublic: true,
+          ownerId: g.ownerId,
+          memberCount: g._count.members,
+        }))
+      );
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Unirse a un grupo público por id (sin código).
+  static async joinPublicGroup(req, res) {
+    try {
+      const userId = req.user.userId;
+      const { groupId } = req.params;
+
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
+      if (!group) return res.status(404).json({ error: 'Group not found' });
+      if (!group.isPublic) return res.status(403).json({ error: 'El grupo no es público' });
+
+      const existing = await prisma.userGroup.findUnique({
+        where: { userId_groupId: { userId, groupId } },
+      });
+      if (existing) return res.status(400).json({ error: 'Ya eres miembro del grupo' });
+
+      await prisma.userGroup.create({ data: { userId, groupId } });
+      res.json({ message: 'Joined group successfully', groupId });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal server error' });

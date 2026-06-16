@@ -9,5 +9,6 @@ router.use(authenticateToken);
 router.get('/matches', PredictionController.getMatchesWithPredictions);
 router.post('/', PredictionController.submitPrediction);
 router.get('/leaderboard/:groupId', PredictionController.getLeaderboard);
+router.get('/user/:userId/group/:groupId', PredictionController.getUserPredictionsInGroup);
 
 module.exports = router;

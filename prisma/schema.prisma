@@ -29,6 +29,7 @@ model Group {
   id         String      @id @default(uuid()) @db.Uuid
   name       String
   imageUrl   String?
+  isPublic   Boolean     @default(false)
   ownerId    String      @db.Uuid
   inviteCode String      @unique
   createdAt  DateTime    @default(now())

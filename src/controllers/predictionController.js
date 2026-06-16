@@ -101,6 +101,7 @@ class PredictionController {
         return {
           userId: member.user.id,
           name: member.user.name,
+          avatarUrl: member.user.avatarUrl,
           totalPoints
         };
       });
@@ -109,6 +110,46 @@ class PredictionController {
       leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
 
       res.json(leaderboard);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Pronósticos de OTRO usuario dentro de un grupo compartido.
+  // Reglas: solicitante y objetivo deben pertenecer al grupo, y solo se
+  // revelan predicciones de partidos ya iniciados/finalizados (anti-trampa).
+  static async getUserPredictionsInGroup(req, res) {
+    try {
+      const requesterId = req.user.userId;
+      const { userId, groupId } = req.params;
+
+      // Ambos deben ser miembros del grupo.
+      const memberships = await prisma.userGroup.findMany({
+        where: { groupId, userId: { in: [requesterId, userId] } },
+      });
+      const ids = new Set(memberships.map((m) => m.userId));
+      if (!ids.has(requesterId) || !ids.has(userId)) {
+        return res.status(403).json({ error: 'No compartes este grupo con el usuario' });
+      }
+
+      const target = await prisma.user.findUnique({ where: { id: userId } });
+      if (!target) return res.status(404).json({ error: 'User not found' });
+
+      const matches = await prisma.match.findMany({ orderBy: { matchDate: 'asc' } });
+      const predictions = await prisma.prediction.findMany({ where: { userId } });
+      const predMap = predictions.reduce((acc, p) => ({ ...acc, [p.matchId]: p }), {});
+
+      const now = new Date();
+      const result = matches
+        // Solo partidos cerrados (ya iniciados o finalizados).
+        .filter((m) => m.status !== 'notstarted' || now >= m.matchDate)
+        .map((m) => ({ ...m, prediction: predMap[m.id] || null }));
+
+      res.json({
+        user: { id: target.id, name: target.name, avatarUrl: target.avatarUrl },
+        matches: result,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal server error' });
