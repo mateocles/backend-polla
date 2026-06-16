@@ -68,19 +68,39 @@ const swaggerSpec = {
         properties: {
           id: { type: 'string', format: 'uuid' },
           name: { type: 'string', example: 'Oficina 2026' },
-          imageUrl: { type: 'string', nullable: true },
+          imageUrl: { type: 'string', nullable: true, description: 'Imagen en base64' },
+          isPublic: { type: 'boolean', description: 'Público (unirse sin código) o privado' },
           inviteCode: { type: 'string', example: 'WORLD-X89J' },
           ownerId: { type: 'string', format: 'uuid' },
           memberCount: { type: 'integer', example: 12 },
           myRank: { type: 'integer', nullable: true, example: 3 },
           myPoints: { type: 'integer', example: 24 },
-          isAdmin: { type: 'boolean' },
+          isAdmin: { type: 'boolean', description: 'true si el usuario es el creador/admin' },
         },
+      },
+      PublicGroup: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          name: { type: 'string' },
+          imageUrl: { type: 'string', nullable: true },
+          isPublic: { type: 'boolean' },
+          ownerId: { type: 'string', format: 'uuid' },
+          memberCount: { type: 'integer' },
+        },
+      },
+      GoogleAuthInput: {
+        type: 'object',
+        required: ['idToken'],
+        properties: { idToken: { type: 'string', description: 'ID token de Google (cliente)' } },
       },
       CreateGroupInput: {
         type: 'object',
         required: ['name'],
-        properties: { name: { type: 'string', example: 'Los Parrilleros' } },
+        properties: {
+          name: { type: 'string', example: 'Los Parrilleros' },
+          isPublic: { type: 'boolean', default: false },
+        },
       },
       JoinGroupInput: {
         type: 'object',
@@ -142,7 +162,15 @@ const swaggerSpec = {
         properties: {
           userId: { type: 'string', format: 'uuid' },
           name: { type: 'string' },
+          avatarUrl: { type: 'string', nullable: true },
           totalPoints: { type: 'integer', example: 42 },
+        },
+      },
+      UserPredictionsResponse: {
+        type: 'object',
+        properties: {
+          user: { $ref: '#/components/schemas/User' },
+          matches: { type: 'array', items: { $ref: '#/components/schemas/Match' } },
         },
       },
       Error: {
@@ -180,6 +208,21 @@ const swaggerSpec = {
         },
       },
     },
+    '/api/auth/google': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Login/registro con Google (ID token)',
+        description: 'Verifica el ID token de Google; crea la cuenta si no existe y devuelve el JWT.',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/GoogleAuthInput' } } },
+        },
+        responses: {
+          200: { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } } } },
+          401: { description: 'Token de Google inválido' },
+        },
+      },
+    },
     '/api/auth/profile': {
       patch: {
         tags: ['Auth'],
@@ -210,6 +253,29 @@ const swaggerSpec = {
         security: [{ bearerAuth: [] }],
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateGroupInput' } } } },
         responses: { 201: { description: 'Grupo creado', content: { 'application/json': { schema: { $ref: '#/components/schemas/Group' } } } } },
+      },
+    },
+    '/api/groups/public': {
+      get: {
+        tags: ['Groups'],
+        summary: 'Listar grupos públicos a los que no perteneces',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'OK', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/PublicGroup' } } } } },
+        },
+      },
+    },
+    '/api/groups/{groupId}/join': {
+      post: {
+        tags: ['Groups'],
+        summary: 'Unirse a un grupo público (sin código)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'groupId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Unido' },
+          403: { description: 'El grupo no es público' },
+          400: { description: 'Ya eres miembro' },
+        },
       },
     },
     '/api/groups/join': {
@@ -266,10 +332,34 @@ const swaggerSpec = {
     '/api/predictions/leaderboard/{groupId}': {
       get: {
         tags: ['Predictions'],
-        summary: 'Tabla de posiciones de un grupo',
+        summary: 'Tabla de posiciones de un grupo (con avatar)',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'groupId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'OK', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/LeaderboardEntry' } } } } } },
+      },
+    },
+    '/api/predictions/user/{userId}/group/{groupId}': {
+      get: {
+        tags: ['Predictions'],
+        summary: 'Pronósticos de otro usuario en un grupo compartido',
+        description: 'Solo si ambos comparten el grupo; solo partidos ya iniciados/finalizados (anti-trampa).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'userId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'groupId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/UserPredictionsResponse' } } } },
+          403: { description: 'No compartes el grupo' },
+        },
+      },
+    },
+    '/api/cron/sync': {
+      get: {
+        tags: ['Predictions'],
+        summary: 'Sincroniza partidos y reparte puntos (cron)',
+        description: 'Trae partidos de la API externa, actualiza marcadores/goleadores y calcula puntos. Protégelo con ?secret=CRON_SECRET si está configurado.',
+        responses: { 200: { description: 'OK' }, 401: { description: 'Secret inválido' } },
       },
     },
   },
