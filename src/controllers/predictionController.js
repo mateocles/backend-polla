@@ -1,13 +1,23 @@
 const prisma = require('../lib/prisma');
 const MatchSyncService = require('../services/matchSync');
 
+// Espera la sync como máximo `ms`; si tarda más, seguimos con lo que haya en DB
+// (la sync continúa en segundo plano para la próxima lectura).
+function syncWithCap(ms = 3000) {
+  return Promise.race([
+    MatchSyncService.syncIfStale().catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, ms)),
+  ]);
+}
+
 class PredictionController {
   static async getMatchesWithPredictions(req, res) {
     try {
       const userId = req.user.userId;
 
-      // Mantiene frescos los partidos en vivo (throttle ~30s).
-      await MatchSyncService.syncIfStale().catch(() => {});
+      // Refresca partidos en vivo, pero responde con la DB si la API externa
+      // tarda más de 3s.
+      await syncWithCap(3000);
 
       // Get all matches
       const matches = await prisma.match.findMany({
@@ -81,8 +91,8 @@ class PredictionController {
     try {
       const { groupId } = req.params;
 
-      // Refresca puntos si hay partidos recién finalizados (throttle).
-      await MatchSyncService.syncIfStale().catch(() => {});
+      // Refresca puntos si hay partidos recién finalizados; máx 3s de espera.
+      await syncWithCap(3000);
 
       // Verify group exists
       const group = await prisma.group.findUnique({

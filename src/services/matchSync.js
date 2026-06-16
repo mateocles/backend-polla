@@ -139,10 +139,12 @@ class MatchSyncService {
     if (MatchSyncService._inFlight) return MatchSyncService._inFlight;
     if (now - (MatchSyncService._lastSync || 0) < maxAgeMs) return;
 
+    // Marca el throttle al inicio: aunque la sync sea lenta o la corte Vercel,
+    // no se re-dispara en cada request durante `maxAgeMs`.
+    MatchSyncService._lastSync = now;
     MatchSyncService._inFlight = (async () => {
       try {
         await MatchSyncService.syncMatches();
-        MatchSyncService._lastSync = Date.now();
       } finally {
         MatchSyncService._inFlight = null;
       }
