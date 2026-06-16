@@ -23,7 +23,7 @@ La **fuente de verdad** de la Polla Mundialista: API REST que gestiona usuarios,
 - **User**: email, passwordHash?, googleId?, name, **avatarUrl** (base64).
 - **Group**: name, **imageUrl** (base64), **isPublic**, **ownerId** (=admin), inviteCode.
 - **UserGroup**: relación N:M.
-- **Match**: equipos, fecha, status (`notstarted`/`finished`), marcador, **homeScorers[]**, **awayScorers[]**.
+- **Match**: equipos, fecha, **status (`notstarted`/`live`/`finished`)**, marcador, **homeScorers[]**, **awayScorers[]**.
 - **Prediction**: `@@unique([userId, matchId])`, marcador, points.
 
 ## Endpoints (ver `/api-docs` para el detalle)
@@ -45,7 +45,8 @@ La **fuente de verdad** de la Polla Mundialista: API REST que gestiona usuarios,
 
 ## Reglas de negocio clave
 - **Puntos**: 6 (marcador exacto) · 3 (acierto de resultado) · 0 (fallo). En `services/pointsCalculator.js`, idempotente (solo actualiza si cambió).
-- **Sync** (`services/matchSync.js`): trae de `worldcup26.ir` (timeout + 3 reintentos), actualiza estado/marcador/**goleadores**, y al pasar a `finished` **reparte puntos**.
+- **Sync** (`services/matchSync.js`): trae de `worldcup26.ir` (timeout + 3 reintentos). Mapea estado desde `time_elapsed` → `notstarted`/`live`/`finished`; actualiza marcador/**goleadores** (también en vivo), y al pasar a `finished` **reparte puntos**.
+- **Partidos en vivo (`live`)**: la API externa NO da el minuto, solo el estado y el marcador actual. `MatchSyncService.syncIfStale(30s)` hace **sync-on-read** (throttle + dedupe) llamado desde `getMatchesWithPredictions` y `getLeaderboard`, para mantener frescos los marcadores en vivo sin cron frecuente.
 - **Predicción cerrada al iniciar el partido**: validado en `submitPrediction` (`status !== notstarted || now >= matchDate`).
 - **Admin = creador** del grupo (`ownerId`). Solo el admin edita el grupo.
 - **Anti-trampa**: los pronósticos de otros usuarios solo se ven para partidos ya iniciados/finalizados.

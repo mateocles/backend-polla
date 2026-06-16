@@ -129,7 +129,7 @@ const swaggerSpec = {
           homeTeamNameEn: { type: 'string', example: 'Argentina' },
           awayTeamNameEn: { type: 'string', example: 'Brazil' },
           matchDate: { type: 'string', format: 'date-time' },
-          status: { type: 'string', enum: ['notstarted', 'finished'] },
+          status: { type: 'string', enum: ['notstarted', 'live', 'finished'], description: 'live = en juego' },
           homeScore: { type: 'integer', nullable: true },
           awayScore: { type: 'integer', nullable: true },
           homeScorers: { type: 'array', items: { type: 'string' }, example: ["L. Messi 27'"] },
@@ -313,6 +313,7 @@ const swaggerSpec = {
       get: {
         tags: ['Predictions'],
         summary: 'Partidos con la predicción del usuario',
+        description: 'Aplica sync-on-read: si pasaron >30s desde la última sincronización, refresca los partidos (marcadores en vivo) desde la API externa antes de responder.',
         security: [{ bearerAuth: [] }],
         responses: { 200: { description: 'OK', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Match' } } } } } },
       },
