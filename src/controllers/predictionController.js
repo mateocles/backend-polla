@@ -16,8 +16,9 @@ class PredictionController {
       const userId = req.user.userId;
 
       // Refresca partidos en vivo, pero responde con la DB si la API externa
-      // tarda más de 3s.
-      await syncWithCap(3000);
+      // tarda más de 1,5s (se prioriza el tiempo de carga; la sync sigue en
+      // segundo plano para la próxima lectura).
+      await syncWithCap(1500);
 
       // Get all matches
       const matches = await prisma.match.findMany({
