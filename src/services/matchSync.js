@@ -64,7 +64,13 @@ class MatchSyncService {
           where: { id: game.id }
         });
 
-        const status = game.finished === 'TRUE' ? 'finished' : 'notstarted';
+        // Estado: finished / live / notstarted (según la API externa).
+        const status =
+          game.finished === 'TRUE'
+            ? 'finished'
+            : game.time_elapsed === 'live'
+            ? 'live'
+            : 'notstarted';
         const homeScore = game.home_score !== null && game.home_score !== "null" ? parseInt(game.home_score) : null;
         const awayScore = game.away_score !== null && game.away_score !== "null" ? parseInt(game.away_score) : null;
         const matchDate = new Date(game.local_date); // Assuming local_date is parseable e.g. "06/13/2026 21:00"
@@ -122,6 +128,30 @@ class MatchSyncService {
       console.error('Error syncing matches:', error.message);
     }
   }
+
+  /**
+   * Sincroniza solo si la última fue hace más de `maxAgeMs` (throttle).
+   * Deduplica syncs concurrentes. Pensado para "sync-on-read" en serverless,
+   * para mantener frescos los partidos en vivo sin saturar la API externa.
+   */
+  static async syncIfStale(maxAgeMs = 30000) {
+    const now = Date.now();
+    if (MatchSyncService._inFlight) return MatchSyncService._inFlight;
+    if (now - (MatchSyncService._lastSync || 0) < maxAgeMs) return;
+
+    MatchSyncService._inFlight = (async () => {
+      try {
+        await MatchSyncService.syncMatches();
+        MatchSyncService._lastSync = Date.now();
+      } finally {
+        MatchSyncService._inFlight = null;
+      }
+    })();
+    return MatchSyncService._inFlight;
+  }
 }
+
+MatchSyncService._lastSync = 0;
+MatchSyncService._inFlight = null;
 
 module.exports = MatchSyncService;

@@ -1,9 +1,13 @@
 const prisma = require('../lib/prisma');
+const MatchSyncService = require('../services/matchSync');
 
 class PredictionController {
   static async getMatchesWithPredictions(req, res) {
     try {
       const userId = req.user.userId;
+
+      // Mantiene frescos los partidos en vivo (throttle ~30s).
+      await MatchSyncService.syncIfStale().catch(() => {});
 
       // Get all matches
       const matches = await prisma.match.findMany({
@@ -76,6 +80,9 @@ class PredictionController {
   static async getLeaderboard(req, res) {
     try {
       const { groupId } = req.params;
+
+      // Refresca puntos si hay partidos recién finalizados (throttle).
+      await MatchSyncService.syncIfStale().catch(() => {});
 
       // Verify group exists
       const group = await prisma.group.findUnique({
