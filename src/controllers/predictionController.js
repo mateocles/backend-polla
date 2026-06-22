@@ -10,15 +10,34 @@ function syncWithCap(ms = 3000) {
   ]);
 }
 
+// ¿Hay partidos en vivo o que debieron empezar en las últimas 3h y aún no
+// figuran como finalizados? En ese caso conviene esperar la sync completa
+// (en serverless el trabajo "en segundo plano" se congela al responder).
+async function hasActiveMatches() {
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const count = await prisma.match.count({
+    where: {
+      status: { not: 'finished' },
+      OR: [{ status: 'live' }, { matchDate: { lte: new Date(), gte: threeHoursAgo } }],
+    },
+  });
+  return count > 0;
+}
+
 class PredictionController {
   static async getMatchesWithPredictions(req, res) {
     try {
       const userId = req.user.userId;
 
-      // Refresca partidos en vivo, pero responde con la DB si la API externa
-      // tarda más de 1,5s (se prioriza el tiempo de carga; la sync sigue en
-      // segundo plano para la próxima lectura).
-      await syncWithCap(1500);
+      // Con partidos en vivo / recién empezados esperamos la sync completa
+      // (ahora solo escribe lo que cambió, así que es rápida) para no perder
+      // resultados por la congelación serverless. En reposo, refresco ligero
+      // con tope de 1,5s para priorizar el tiempo de carga.
+      if (await hasActiveMatches()) {
+        await MatchSyncService.syncIfStale().catch(() => {});
+      } else {
+        await syncWithCap(1500);
+      }
 
       // Get all matches
       const matches = await prisma.match.findMany({
