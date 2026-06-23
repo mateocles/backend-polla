@@ -1,7 +1,9 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const prisma = require('../lib/prisma');
+const EmailService = require('../services/emailService');
 
 // Audiencias válidas para los ID tokens de Google (web/iOS/Android/Expo).
 const GOOGLE_AUDIENCES = [
@@ -54,6 +56,64 @@ class AuthController {
       const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
       res.json({ token, user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl } });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Paso 1: solicita recuperación. Genera un token de un solo uso (1h) y envía
+  // un correo con el enlace a la app web. Responde 200 SIEMPRE para no revelar
+  // si el email está registrado.
+  static async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email is required' });
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      // Solo enviamos correo a usuarios con contraseña (no a cuentas solo-Google).
+      if (user && user.passwordHash) {
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { resetToken: token, resetTokenExpiry: expiry },
+        });
+        await EmailService.sendPasswordReset(user.email, token);
+      }
+
+      res.json({ message: 'Si el correo existe, se enviaron instrucciones de recuperación.' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Paso 2: aplica la nueva contraseña usando el token del correo.
+  static async resetPassword(req, res) {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ error: 'Token y contraseña son requeridos' });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      }
+
+      const user = await prisma.user.findFirst({
+        where: { resetToken: token, resetTokenExpiry: { gt: new Date() } },
+      });
+      if (!user) {
+        return res.status(400).json({ error: 'El enlace es inválido o ha expirado' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, resetToken: null, resetTokenExpiry: null },
+      });
+
+      res.json({ message: 'Contraseña actualizada correctamente' });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal server error' });
